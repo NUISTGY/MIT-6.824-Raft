@@ -42,6 +42,18 @@ type ApplyMsg struct {
 	CommandIndex int
 }
 
+// LogEntry
+// each entry contains command for state machine, and term when entry was received by leader (first index is 1)
+type LogEntry struct {
+	Command interface{}
+	Term    int
+}
+
+// ROLE_当前角色
+const ROLE_LEADER = "Leader"
+const ROLE_FOLLOWER = "Follower"
+const ROLE_CANDIDATES = "Candidates"
+
 // Raft
 // A Go object implementing a single Raft peer.
 type Raft struct {
@@ -54,6 +66,8 @@ type Raft struct {
 	// Your data here (2A, 2B, 2C).
 	// Look at the paper's Figure 2 for a description of what
 	// state a Raft server must maintain.
+
+	// For Lab-2A:
 
 }
 
@@ -106,6 +120,11 @@ func (rf *Raft) readPersist(data []byte) {
 // field names must start with capital letters!
 type RequestVoteArgs struct {
 	// Your data here (2A, 2B).
+	// For Lab-2A:
+	Term         int
+	CandidateId  int
+	LastLogIndex int
+	LastLogTerm  int
 }
 
 // RequestVoteReply
@@ -113,6 +132,34 @@ type RequestVoteArgs struct {
 // field names must start with capital letters!
 type RequestVoteReply struct {
 	// Your data here (2A).
+	Term         int
+	VoteGrandted int
+}
+
+// AppendEntriesArgs
+// Invoked by leader to replicate log entries (§5.3); also used as heartbeat (§5.2).
+// term			leader's term
+// leaderId 	so follower can redirect clients index of log entry immediately preceding new ones
+// prevLogindex	index of log entry immediately preceding new ones
+// prevLogTerm	term of prevLogIndex entry
+// entries		log entries to store (empty for heartbeat; may send more than one for efficiency)
+// leaderCommit	leader's commitIndex
+
+type AppendEntriesArgs struct {
+	Term         int
+	LeaderId     int
+	PrevLogIndex int
+	PrevLogTerm  int
+	Entries      []*LogEntry
+	LeaderCommit int
+}
+
+// AppendEntriesReply
+// term 		currentTerm, for leader to update itself
+// success		true if follower contained entry matching prevLogIndex and prevLogTerm
+type AppendEntriesReply struct {
+	Term    int
+	Success bool
 }
 
 // RequestVote
