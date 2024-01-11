@@ -90,11 +90,14 @@ type Raft struct {
 
 // GetState return currentTerm and whether this server
 // believes it is the leader.
+// 由单元测试程序调用
 func (rf *Raft) GetState() (int, bool) {
 
 	var term int
 	var isleader bool
 	// Your code here (2A).
+	term = rf.currentTerm
+	isleader = rf.role == ROLE_LEADER
 	return term, isleader
 }
 
@@ -180,12 +183,28 @@ type AppendEntriesReply struct {
 }
 
 // RequestVote
-// example RequestVote RPC handler.
+// RequestVote RPC handler.
 func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	// Your code here (2A, 2B).
 }
 
-// example code to send a RequestVote RPC to a server.
+// AppendEntries
+// AppendEntries RPC handler.
+func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply) {
+	// Your code here (2A, 2B).
+}
+
+// election逻辑
+func (rf *Raft) electionLoop() {
+
+}
+
+// leader逻辑
+func (rf *Raft) appendEntriesLoop() {
+
+}
+
+// Send RPC to a server.
 // server is the index of the target server in rf.peers[].
 // expects RPC arguments in args.
 // fills in *reply with RPC reply, so caller should
@@ -203,7 +222,7 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 // can't be reached, a lost request, or a lost reply.
 //
 // Call() is guaranteed to return (perhaps after a delay) *except* if the
-// handler function on the server side does not return.  Thus there
+// handler function on the server side does not return.  Thus, there
 // is no need to implement your own timeouts around Call().
 //
 // look at the comments in ../labrpc/labrpc.go for more details.
@@ -214,6 +233,10 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 // the struct itself.
 func (rf *Raft) sendRequestVote(server int, args *RequestVoteArgs, reply *RequestVoteReply) bool {
 	ok := rf.peers[server].Call("Raft.RequestVote", args, reply)
+	return ok
+}
+func (rf *Raft) sendAppendEntries(server int, args *AppendEntriesArgs, reply *AppendEntriesReply) bool {
+	ok := rf.peers[server].Call("Raft.AppendEntries", args, reply)
 	return ok
 }
 
@@ -278,9 +301,19 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.me = me
 
 	// Your initialization code here (2A, 2B, 2C).
-
+	rf.role = ROLE_FOLLOWER
+	rf.votedFor = -1
+	rf.leaderId = -1
+	rf.electionTimer = time.Now()
 	// initialize from state persisted before a crash
 	rf.readPersist(persister.ReadRaftState())
+
+	// election逻辑
+	go rf.electionLoop()
+	// leader逻辑
+	go rf.appendEntriesLoop()
+
+	DPrintf("Raftnode[%d]启动", me)
 
 	return rf
 }
