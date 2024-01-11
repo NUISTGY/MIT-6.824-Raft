@@ -19,6 +19,7 @@ package raft
 
 import (
 	"sync"
+	"time"
 )
 import "sync/atomic"
 import "../labrpc"
@@ -67,8 +68,24 @@ type Raft struct {
 	// Look at the paper's Figure 2 for a description of what
 	// state a Raft server must maintain.
 
-	// For Lab-2A:
+	// Persistent state on all servers
+	currentTerm int         // 见过的最大任期 (initialized to 0 on first boot, increases monotonically)
+	votedFor    int         // 记录在currentTerm任期投票给谁了 (or null if none)
+	log         []*LogEntry // 日志记录集 (first index is 1)
 
+	// Volatile state on all servers
+	commitIndex int // 已知的最大已提交索引
+	lastApplied int // 当前应用到状态机的索引 (initialized to 0, increases monotonically)
+
+	// Volatile state on leaders（成为leader时重置）
+	nextIndex  []int //	for each server, index of the next log entry to send to that server (initialized to leader last log index + 1)
+	matchIndex []int // for each server, index of highest log entry known to be replicated on server (initialized to 0, increases monotonically)
+
+	// others on all servers
+	role          string    // 角色
+	leaderId      int       // leader的id
+	electionTimer time.Time // 选举时间（刷新时机：收到leader心跳、给其他candidates投票、请求其他节点投票）
+	heartBeatTime time.Time // 心跳时间，作为leader，定期向手下发送心跳包的时间
 }
 
 // GetState return currentTerm and whether this server
