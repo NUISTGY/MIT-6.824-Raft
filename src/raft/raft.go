@@ -19,6 +19,7 @@ package raft
 
 import (
 	"math/rand"
+	"sort"
 	"sync"
 	"time"
 )
@@ -40,8 +41,10 @@ import "../labrpc"
 // ApplyMsg, but set CommandValid to false for these other uses.
 type ApplyMsg struct {
 	CommandValid bool
+	// 向application层提交日志
 	Command      interface{}
 	CommandIndex int
+	CommandTerm  int
 }
 
 // LogEntry
@@ -70,9 +73,9 @@ type Raft struct {
 	// state a Raft server must maintain.
 
 	// Persistent state on all servers
-	currentTerm int         // 见过的最大任期 (initialized to 0 on first boot, increases monotonically)
-	votedFor    int         // 记录在currentTerm任期投票给谁了 (or null if none)
-	log         []*LogEntry // 日志记录集 (first index is 1)
+	currentTerm int        // 见过的最大任期 (initialized to 0 on first boot, increases monotonically)
+	votedFor    int        // 记录在currentTerm任期投票给谁了 (or null if none)
+	log         []LogEntry // 日志记录集 (first index is 1)
 
 	// Volatile state on all servers
 	commitIndex int // 已知的最大已提交索引
@@ -175,7 +178,7 @@ type AppendEntriesArgs struct {
 	LeaderId     int
 	PrevLogIndex int
 	PrevLogTerm  int
-	Entries      []*LogEntry
+	Entries      []LogEntry
 	LeaderCommit int
 }
 
@@ -229,12 +232,11 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 		if len(rf.log) != 0 {
 			lastLogTerm = rf.log[len(rf.log)-1].Term
 		}
-		if args.LastLogTerm < lastLogTerm || args.LastLogIndex < len(rf.log) {
-			return
+		if args.LastLogTerm > lastLogTerm || (args.LastLogTerm == lastLogTerm && args.LastLogIndex >= len(rf.log)) {
+			rf.votedFor = args.CandidateId
+			reply.VoteGranted = true
+			rf.lastActiveTime = time.Now() // 为其他人投票，才会重置自己的下次投票时间
 		}
-		rf.votedFor = args.CandidateId
-		reply.VoteGranted = true
-		rf.lastActiveTime = time.Now() // 为其他人投票，那么重置自己的下次投票时间
 	}
 
 	// 日志操作lab-2A不实现
@@ -249,11 +251,11 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 
-	DPrintf("RaftNode[%d] Handle AppendEntries, LeaderId[%d] Term[%d] CurrentTerm[%d] role=[%s]",
-		rf.me, args.LeaderId, args.Term, rf.currentTerm, rf.role)
+	DPrintf("RaftNode[%d] Handle AppendEntries, LeaderId[%d] Term[%d] CurrentTerm[%d] role=[%s] logIndex[%d] prevLogIndex[%d] prevLogTerm[%d] commitIndex[%d] Entries[%v]",
+		rf.me, rf.leaderId, args.Term, rf.currentTerm, rf.role, len(rf.log), args.PrevLogIndex, args.PrevLogTerm, rf.commitIndex, args.Entries)
 	defer func() {
-		DPrintf("RaftNode[%d] Return AppendEntries, LeaderId[%d] Term[%d] CurrentTerm[%d] role=[%s]",
-			rf.me, args.LeaderId, args.Term, rf.currentTerm, rf.role)
+		DPrintf("RaftNode[%d] Return AppendEntries, LeaderId[%d] Term[%d] CurrentTerm[%d] role=[%s] logIndex[%d] prevLogIndex[%d] prevLogTerm[%d] Success[%v] commitIndex[%d] log[%v]",
+			rf.me, rf.leaderId, args.Term, rf.currentTerm, rf.role, len(rf.log), args.PrevLogIndex, args.PrevLogTerm, reply.Success, rf.commitIndex, len(rf.log))
 	}()
 
 	reply.Term = rf.currentTerm
@@ -277,8 +279,38 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	// 刷新最近一次活跃时间
 	rf.lastActiveTime = time.Now()
 
-	// 日志操作lab-2A不实现
+	// for lab-2b
+	// 如果本地没有前一个日志（PrevLogIndex）的话，那么false
+	if len(rf.log) < args.PrevLogIndex {
+		return
+	}
+	// 如果本地有前一个日志的话，那么term必须相同，否则false
+	if args.PrevLogIndex > 0 && rf.log[args.PrevLogIndex-1].Term != args.PrevLogTerm {
+		return
+	}
+
+	for i, logEntry := range args.Entries {
+		index := args.PrevLogIndex + i + 1
+		if index > len(rf.log) {
+			rf.log = append(rf.log, logEntry)
+		} else {
+			if rf.log[index-1].Term != logEntry.Term {
+				rf.log = rf.log[:index-1]         // 删除当前以及后续所有log
+				rf.log = append(rf.log, logEntry) // 把新log加入进来
+			} // term一样啥也不用做，继续向后比对Log
+		}
+	}
+
 	rf.persist()
+
+	// 更新提交下标
+	if args.LeaderCommit > rf.commitIndex {
+		rf.commitIndex = args.LeaderCommit
+		if len(rf.log) < rf.commitIndex {
+			rf.commitIndex = len(rf.log)
+		}
+	}
+	reply.Success = true
 }
 
 // Send RPC to a server.
@@ -336,7 +368,24 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 	isLeader := true
 
 	// Your code here (2B).
+	rf.mu.Lock()
+	defer rf.mu.Unlock()
 
+	//只能往leader上附加日志，其他角色不接受该操作
+	if rf.role != ROLE_LEADER {
+		return -1, -1, false
+	}
+
+	log := LogEntry{
+		Command: command,
+		Term:    rf.currentTerm,
+	}
+	rf.log = append(rf.log, log)
+	index = len(rf.log)
+	term = rf.currentTerm
+	rf.persist()
+
+	DPrintf("Leader-Node[%d] add new Command[%d], logIndex[%d] currentTerm[%d]", rf.me, log.Command, index, term)
 	return index, term, isLeader
 }
 
@@ -465,6 +514,17 @@ func (rf *Raft) electionLoop() {
 				if voteCount > len(rf.peers)/2 {
 					rf.role = ROLE_LEADER
 					rf.leaderId = rf.me
+
+					// for lab-2b. 新选举出来的leader要刷新nextIndex和matchIndex
+					rf.nextIndex = make([]int, len(rf.peers))
+					for i := 0; i < len(rf.peers); i++ {
+						rf.nextIndex[i] = len(rf.log) + 1
+					}
+					rf.matchIndex = make([]int, len(rf.peers))
+					for i := 0; i < len(rf.peers); i++ {
+						rf.matchIndex[i] = 0
+					}
+
 					rf.heartBeatTime = time.Unix(0, 0) // 令appendEntries广播立即执行
 					return
 				}
@@ -500,19 +560,29 @@ func (rf *Raft) appendEntriesLoop() {
 				resp   *AppendEntriesReply
 			}
 
-			// 循环并发发送RPC心跳
+			// 并发RPC心跳（跳过自身）
 			for peerId := 0; peerId < len(rf.peers); peerId++ {
 				if peerId == rf.me {
 					continue
 				}
+
+				//初始化RPC请求参数并填充
 				args := AppendEntriesArgs{}
 				args.Term = rf.currentTerm
 				args.LeaderId = rf.me
-				// log相关字段在lab-2A不处理
-				go func(id int, args1 *AppendEntriesArgs) {
-					DPrintf("RaftNode[%d] appendEntries starts, myTerm[%d] peerId[%d]", rf.me, args1.Term, id)
+				args.PrevLogIndex = rf.nextIndex[peerId] - 1
+				if args.PrevLogIndex > 0 {
+					args.PrevLogTerm = rf.log[args.PrevLogIndex-1].Term
+				}
+				args.Entries = make([]LogEntry, 0)
+				args.Entries = append(args.Entries, rf.log[rf.nextIndex[peerId]-1:]...)
+				args.LeaderCommit = rf.commitIndex
+				DPrintf("RaftNode[%d] appendEntries starts,  currentTerm[%d] peer[%d] logIndex=[%d] nextIndex[%d] matchIndex[%d] args.Entries[%d] commitIndex[%d]",
+					rf.me, rf.currentTerm, peerId, len(rf.log), rf.nextIndex[peerId], rf.matchIndex[peerId], len(args.Entries), rf.commitIndex)
+
+				go func(id int, args *AppendEntriesArgs) {
 					reply := AppendEntriesReply{}
-					if ok := rf.sendAppendEntries(id, args1, &reply); ok {
+					if ok := rf.sendAppendEntries(id, args, &reply); ok {
 						rf.mu.Lock()
 						defer rf.mu.Unlock()
 						if reply.Term > rf.currentTerm { // 变成follower
@@ -522,11 +592,74 @@ func (rf *Raft) appendEntriesLoop() {
 							rf.votedFor = -1
 							rf.persist()
 						}
+						if reply.Success {
+							// leader中该peerId对应的nextIndex和matchIndex增加
+							rf.nextIndex[id] += len(args.Entries)
+							rf.matchIndex[id] = rf.nextIndex[id] - 1
+
+							// 计算所有服务器的matchIndex
+							// 排序后取中位数
+							// 不包括自己在内
+							sortedMatchIndex := make([]int, 0)
+							sortedMatchIndex = append(sortedMatchIndex, len(rf.log))
+							for i := 0; i < len(rf.peers); i++ {
+								if i == rf.me {
+									continue
+								}
+								sortedMatchIndex = append(sortedMatchIndex, rf.matchIndex[i])
+							}
+							sort.Ints(sortedMatchIndex)
+
+							// 更新commitIndex
+							// 如果中位数大于当前commitIndex且term匹配才更新,保证一致性
+							// 不同term仅完成复制，不更新commitIndex
+							newCommitIndex := sortedMatchIndex[len(rf.peers)/2]
+							if newCommitIndex > rf.commitIndex &&
+								rf.log[newCommitIndex-1].Term == rf.currentTerm {
+								rf.commitIndex = newCommitIndex
+							}
+							// 如果复制失败，则重置nextIndex，注意不能为0
+						} else {
+							rf.nextIndex[id] -= 1
+							if rf.nextIndex[id] < 1 {
+								rf.nextIndex[id] = 1
+							}
+						}
 						DPrintf("RaftNode[%d] appendEntries ends, peerTerm[%d] myCurrentTerm[%d] myRole[%s]", rf.me, reply.Term, rf.currentTerm, rf.role)
 					}
 				}(peerId, &args)
 			}
 		}()
+	}
+}
+
+// applyLogLoop 定期检查是否有新的日志需要提交给应用层
+// 它会一直运行直到这个 Raft 节点被 kill
+func (rf *Raft) applyLogLoop(applyCh chan ApplyMsg) {
+	for !rf.killed() {
+		time.Sleep(10 * time.Millisecond)
+
+		var appliedMsgs = make([]ApplyMsg, 0)
+
+		func() {
+			rf.mu.Lock()
+			defer rf.mu.Unlock()
+
+			for rf.commitIndex > rf.lastApplied {
+				rf.lastApplied += 1
+				appliedMsgs = append(appliedMsgs, ApplyMsg{
+					CommandValid: true,
+					Command:      rf.log[rf.lastApplied-1].Command,
+					CommandIndex: rf.lastApplied,
+					CommandTerm:  rf.log[rf.lastApplied-1].Term,
+				})
+				DPrintf("RaftNode[%d] applyLog, currentTerm[%d] lastApplied[%d] commitIndex[%d]", rf.me, rf.currentTerm, rf.lastApplied, rf.commitIndex)
+			}
+		}()
+		// 释放锁,向应用层提交日志
+		for _, msg := range appliedMsgs {
+			applyCh <- msg
+		}
 	}
 }
 
@@ -558,6 +691,8 @@ func Make(peers []*labrpc.ClientEnd, me int, persister *Persister, applyCh chan 
 	go rf.electionLoop()
 	// leader逻辑
 	go rf.appendEntriesLoop()
+	// apply逻辑
+	go rf.applyLogLoop(applyCh)
 
 	DPrintf("Raftnode[%d]启动", me)
 
