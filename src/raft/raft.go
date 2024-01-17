@@ -495,11 +495,6 @@ func (rf *Raft) appendEntriesLoop() {
 			}
 			rf.heartBeatTime = time.Now()
 
-			type AppendResult struct {
-				peerId int
-				resp   *AppendEntriesReply
-			}
-
 			// 循环并发发送RPC心跳
 			for peerId := 0; peerId < len(rf.peers); peerId++ {
 				if peerId == rf.me {
