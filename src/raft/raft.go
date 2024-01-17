@@ -18,6 +18,7 @@ package raft
 //
 
 import (
+	"bytes"
 	"math/rand"
 	"sort"
 	"sync"
@@ -25,6 +26,7 @@ import (
 )
 import "sync/atomic"
 import "../labrpc"
+import "../labgob"
 
 // import "bytes"
 // import "../labgob"
@@ -114,13 +116,15 @@ func (rf *Raft) GetState() (int, bool) {
 // see paper's Figure 2 for a description of what should be persistent.
 func (rf *Raft) persist() {
 	// Your code here (2C).
-	// Example:
-	// w := new(bytes.Buffer)
-	// e := labgob.NewEncoder(w)
-	// e.Encode(rf.xxx)
-	// e.Encode(rf.yyy)
-	// data := w.Bytes()
-	// rf.persister.SaveRaftState(data)
+	// 不用加锁，外层逻辑会锁
+	w := new(bytes.Buffer)
+	e := labgob.NewEncoder(w)
+	e.Encode(rf.currentTerm)
+	e.Encode(rf.votedFor)
+	e.Encode(rf.log)
+	data := w.Bytes()
+	DPrintf("RaftNode[%d] persist starts, currentTerm[%d] voteFor[%d] log[%v]", rf.me, rf.currentTerm, rf.votedFor, rf.log)
+	rf.persister.SaveRaftState(data)
 }
 
 // restore previously persisted state.
@@ -129,18 +133,13 @@ func (rf *Raft) readPersist(data []byte) {
 		return
 	}
 	// Your code here (2C).
-	// Example:
-	// r := bytes.NewBuffer(data)
-	// d := labgob.NewDecoder(r)
-	// var xxx
-	// var yyy
-	// if d.Decode(&xxx) != nil ||
-	//    d.Decode(&yyy) != nil {
-	//   error...
-	// } else {
-	//   rf.xxx = xxx
-	//   rf.yyy = yyy
-	// }
+	r := bytes.NewBuffer(data)
+	d := labgob.NewDecoder(r)
+	rf.mu.Lock()
+	defer rf.mu.Unlock()
+	d.Decode(&rf.currentTerm)
+	d.Decode(&rf.votedFor)
+	d.Decode(&rf.log)
 }
 
 // RequestVoteArgs
@@ -188,6 +187,9 @@ type AppendEntriesArgs struct {
 type AppendEntriesReply struct {
 	Term    int
 	Success bool
+	// 新增2个字段，用于leader和follower协调同步位置，优化回退性能
+	ConflictIndex int
+	ConflictTerm  int
 }
 
 // RequestVote
@@ -224,7 +226,7 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	}
 
 	// 每个任期，只能投票给1人
-	if rf.votedFor == -1 {
+	if rf.votedFor == -1 || rf.votedFor == args.CandidateId {
 		// candidate的日志必须比我的新
 		// 1, 最后一条log，任期大的更新
 		// 2，更长的log则更新
@@ -239,7 +241,6 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 		}
 	}
 
-	// 日志操作lab-2A不实现
 	rf.persist()
 }
 
@@ -253,13 +254,16 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 
 	DPrintf("RaftNode[%d] Handle AppendEntries, LeaderId[%d] Term[%d] CurrentTerm[%d] role=[%s] logIndex[%d] prevLogIndex[%d] prevLogTerm[%d] commitIndex[%d] Entries[%v]",
 		rf.me, rf.leaderId, args.Term, rf.currentTerm, rf.role, len(rf.log), args.PrevLogIndex, args.PrevLogTerm, rf.commitIndex, args.Entries)
+
+	reply.Term = rf.currentTerm
+	reply.Success = false
+	reply.ConflictIndex = -1
+	reply.ConflictTerm = -1
+
 	defer func() {
 		DPrintf("RaftNode[%d] Return AppendEntries, LeaderId[%d] Term[%d] CurrentTerm[%d] role=[%s] logIndex[%d] prevLogIndex[%d] prevLogTerm[%d] Success[%v] commitIndex[%d] log[%v]",
 			rf.me, rf.leaderId, args.Term, rf.currentTerm, rf.role, len(rf.log), args.PrevLogIndex, args.PrevLogTerm, reply.Success, rf.commitIndex, len(rf.log))
 	}()
-
-	reply.Term = rf.currentTerm
-	reply.Success = false
 
 	if args.Term < rf.currentTerm {
 		return
@@ -270,7 +274,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		rf.currentTerm = args.Term
 		rf.role = ROLE_FOLLOWER
 		rf.votedFor = -1
-		rf.leaderId = -1
+		rf.persist()
 		// 继续向下走
 	}
 
@@ -282,10 +286,22 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	// for lab-2b
 	// 如果本地没有前一个日志（PrevLogIndex）的话，那么false
 	if len(rf.log) < args.PrevLogIndex {
+		// 直接移动返回len(rf.log),省的一个个移动
+		reply.ConflictIndex = len(rf.log)
 		return
 	}
 	// 如果本地有前一个日志的话，那么term必须相同，否则false
+	// 优化回退性能思路：
+	// 如果在leader中也有这个term的日志，则从leader日志中该term最后一次出现的位置开始尝试同步，避免给follower错过这个term的任何一条日志；
+	// 如果冲突term在leader里压根不在，则从follower日志该term首次出现的下标开始同步，因为leader压根没有这个term的日志，相当于对follower截断
 	if args.PrevLogIndex > 0 && rf.log[args.PrevLogIndex-1].Term != args.PrevLogTerm {
+		reply.ConflictTerm = rf.log[args.PrevLogIndex-1].Term
+		for index := 1; index <= args.PrevLogIndex; index++ { // 标记冲突term在folloer节点的首次出现位置，最差就是PrevLogIndex
+			if rf.log[index-1].Term == reply.ConflictTerm {
+				reply.ConflictIndex = index
+				break
+			}
+		}
 		return
 	}
 
@@ -412,7 +428,7 @@ func (rf *Raft) killed() bool {
 // election逻辑
 func (rf *Raft) electionLoop() {
 	for !rf.killed() {
-		time.Sleep(1 * time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 
 		func() {
 			rf.mu.Lock()
@@ -534,7 +550,6 @@ func (rf *Raft) electionLoop() {
 }
 
 // leader执行的逻辑
-// lab-2A只做心跳，暂时不考虑log同步
 func (rf *Raft) appendEntriesLoop() {
 	for !rf.killed() {
 		time.Sleep(1 * time.Millisecond)
@@ -554,11 +569,6 @@ func (rf *Raft) appendEntriesLoop() {
 				return
 			}
 			rf.heartBeatTime = time.Now()
-
-			type AppendResult struct {
-				peerId int
-				resp   *AppendEntriesReply
-			}
 
 			// 并发RPC心跳（跳过自身）
 			for peerId := 0; peerId < len(rf.peers); peerId++ {
@@ -591,10 +601,11 @@ func (rf *Raft) appendEntriesLoop() {
 							rf.currentTerm = reply.Term
 							rf.votedFor = -1
 							rf.persist()
+							return
 						}
 						if reply.Success {
 							// leader中该peerId对应的nextIndex和matchIndex增加
-							rf.nextIndex[id] += len(args.Entries)
+							rf.nextIndex[id] = args.PrevLogIndex + len(args.Entries) + 1
 							rf.matchIndex[id] = rf.nextIndex[id] - 1
 
 							// 计算所有服务器的matchIndex
@@ -620,12 +631,30 @@ func (rf *Raft) appendEntriesLoop() {
 							}
 							// 如果复制失败，则重置nextIndex，注意不能为0
 						} else {
-							rf.nextIndex[id] -= 1
-							if rf.nextIndex[id] < 1 {
-								rf.nextIndex[id] = 1
+							// 回退优化，参考：https://thesquareplanet.com/blog/students-guide-to-raft/#an-aside-on-optimizations
+							if reply.ConflictTerm != -1 { // follower的prevLogIndex位置term不同
+								conflictTermIndex := -1
+								for index := args.PrevLogIndex; index >= 1; index-- { // 找最后一个conflictTerm
+									if rf.log[index-1].Term == reply.ConflictTerm {
+										conflictTermIndex = index
+										break
+									}
+								}
+								if conflictTermIndex != -1 { // leader也存在冲突term的日志，则从term最后一次出现之后的日志开始尝试同步，因为leader/follower可能在该term的日志有部分相同
+									rf.nextIndex[id] = conflictTermIndex
+								} else { // leader并没有term的日志，那么把follower日志中该term首次出现的位置作为尝试同步的位置，即截断follower在此term的所有日志
+									rf.nextIndex[id] = reply.ConflictIndex
+								}
+							} else {
+								// follower没有发现prevLogIndex term冲突, 日志长度不够
+								// 这时候我们将返回的conflictIndex设置为nextIndex即可
+								rf.nextIndex[id] = reply.ConflictIndex
+								if rf.nextIndex[id] < 1 {
+									rf.nextIndex[id] = 1
+								}
 							}
+							DPrintf("RaftNode[%d] appendEntries ends, peerTerm[%d] myCurrentTerm[%d] myRole[%s]", rf.me, reply.Term, rf.currentTerm, rf.role)
 						}
-						DPrintf("RaftNode[%d] appendEntries ends, peerTerm[%d] myCurrentTerm[%d] myRole[%s]", rf.me, reply.Term, rf.currentTerm, rf.role)
 					}
 				}(peerId, &args)
 			}
