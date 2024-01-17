@@ -555,11 +555,6 @@ func (rf *Raft) appendEntriesLoop() {
 			}
 			rf.heartBeatTime = time.Now()
 
-			type AppendResult struct {
-				peerId int
-				resp   *AppendEntriesReply
-			}
-
 			// 并发RPC心跳（跳过自身）
 			for peerId := 0; peerId < len(rf.peers); peerId++ {
 				if peerId == rf.me {
@@ -591,6 +586,7 @@ func (rf *Raft) appendEntriesLoop() {
 							rf.currentTerm = reply.Term
 							rf.votedFor = -1
 							rf.persist()
+							return // 状态变更，提前中止
 						}
 						if reply.Success {
 							// leader中该peerId对应的nextIndex和matchIndex增加
