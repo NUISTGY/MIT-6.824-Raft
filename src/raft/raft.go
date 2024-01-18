@@ -590,7 +590,7 @@ func (rf *Raft) appendEntriesLoop() {
 						}
 						if reply.Success {
 							// leader中该peerId对应的nextIndex和matchIndex增加
-							rf.nextIndex[id] += len(args.Entries)
+							rf.nextIndex[id] = args.PrevLogIndex + len(args.Entries) + 1
 							rf.matchIndex[id] = rf.nextIndex[id] - 1
 
 							// 计算所有服务器的matchIndex
