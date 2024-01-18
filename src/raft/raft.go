@@ -595,6 +595,10 @@ func (rf *Raft) appendEntriesLoop() {
 					if ok := rf.sendAppendEntries(id, args, &reply); ok {
 						rf.mu.Lock()
 						defer rf.mu.Unlock()
+						// 如果不是rpc前的leader状态了，那么啥也别做了
+						if rf.currentTerm != args.Term {
+							return
+						}
 						if reply.Term > rf.currentTerm { // 变成follower
 							rf.role = ROLE_FOLLOWER
 							rf.leaderId = -1
