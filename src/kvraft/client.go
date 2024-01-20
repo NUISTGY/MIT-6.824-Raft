@@ -70,6 +70,7 @@ func (ck *Clerk) Get(key string) string {
 		// 没找到leader，重新选择leader
 		ck.mu.Lock()
 		leaderId = (leaderId + 1) % len(ck.servers)
+		ck.leaderId = leaderId
 		ck.mu.Unlock()
 
 		time.Sleep(1 * time.Millisecond)
@@ -111,6 +112,7 @@ func (ck *Clerk) PutAppend(key string, value string, op string) {
 		// 没找到leader，重新选择leader
 		ck.mu.Lock()
 		leaderId = (leaderId + 1) % len(ck.servers)
+		ck.leaderId = leaderId
 		ck.mu.Unlock()
 
 		time.Sleep(1 * time.Millisecond)
