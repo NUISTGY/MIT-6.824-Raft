@@ -1,0 +1,186 @@
+<mxfile host="app.diagrams.net" modified="2024-01-20T07:28:32.370Z" agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2.1 Safari/605.1.15" etag="icca2yAagykcuY_nv6ft" version="22.1.21" type="github">
+  <diagram name="第 1 页" id="FPYjRtR00kIafVPNTrFi">
+    <mxGraphModel dx="873" dy="719" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="yPbcOqCsxhrlnARZazFJ-10" value="" style="html=1;points=[[0,0,0,0,5],[0,1,0,0,-5],[1,0,0,0,5],[1,1,0,0,-5]];perimeter=orthogonalPerimeter;outlineConnect=0;targetShapes=umlLifeline;portConstraint=eastwest;newEdgeStyle={&quot;curved&quot;:0,&quot;rounded&quot;:0};" vertex="1" parent="1">
+          <mxGeometry x="70" y="80" width="10" height="640" as="geometry" />
+        </mxCell>
+        <mxCell id="yPbcOqCsxhrlnARZazFJ-11" value="" style="html=1;points=[[0,0,0,0,5],[0,1,0,0,-5],[1,0,0,0,5],[1,1,0,0,-5]];perimeter=orthogonalPerimeter;outlineConnect=0;targetShapes=umlLifeline;portConstraint=eastwest;newEdgeStyle={&quot;curved&quot;:0,&quot;rounded&quot;:0};" vertex="1" parent="1">
+          <mxGeometry x="270" y="80" width="10" height="640" as="geometry" />
+        </mxCell>
+        <mxCell id="yPbcOqCsxhrlnARZazFJ-12" value="" style="html=1;points=[[0,0,0,0,5],[0,1,0,0,-5],[1,0,0,0,5],[1,1,0,0,-5]];perimeter=orthogonalPerimeter;outlineConnect=0;targetShapes=umlLifeline;portConstraint=eastwest;newEdgeStyle={&quot;curved&quot;:0,&quot;rounded&quot;:0};" vertex="1" parent="1">
+          <mxGeometry x="470" y="80" width="10" height="640" as="geometry" />
+        </mxCell>
+        <mxCell id="yPbcOqCsxhrlnARZazFJ-17" value="测试程序启动&lt;br&gt;调用MakeClerk" style="html=1;align=left;spacingLeft=2;endArrow=block;rounded=0;edgeStyle=orthogonalEdgeStyle;curved=0;rounded=0;" edge="1" parent="1">
+          <mxGeometry x="-0.0101" relative="1" as="geometry">
+            <mxPoint x="80" y="100" as="sourcePoint" />
+            <Array as="points">
+              <mxPoint x="110" y="130" />
+            </Array>
+            <mxPoint x="85" y="130.02857142857135" as="targetPoint" />
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="yPbcOqCsxhrlnARZazFJ-18" value="测试程序启动&lt;br&gt;调用StartKVServer&lt;br&gt;循环进程监听applyCh" style="html=1;align=left;spacingLeft=2;endArrow=block;rounded=0;edgeStyle=orthogonalEdgeStyle;curved=0;rounded=0;" edge="1" parent="1">
+          <mxGeometry x="-0.0057" relative="1" as="geometry">
+            <mxPoint x="280" y="100" as="sourcePoint" />
+            <Array as="points">
+              <mxPoint x="310" y="130" />
+            </Array>
+            <mxPoint x="285" y="130.02857142857135" as="targetPoint" />
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="yPbcOqCsxhrlnARZazFJ-19" value="" style="verticalLabelPosition=bottom;verticalAlign=top;html=1;shape=mxgraph.basic.layered_rect;dx=10;outlineConnect=0;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="25" y="20" width="100" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="yPbcOqCsxhrlnARZazFJ-20" value="clerk" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry x="47" y="30" width="50" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="yPbcOqCsxhrlnARZazFJ-21" value="" style="verticalLabelPosition=bottom;verticalAlign=top;html=1;shape=mxgraph.basic.layered_rect;dx=10;outlineConnect=0;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="225" y="20" width="100" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="yPbcOqCsxhrlnARZazFJ-22" value="kvservices" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry x="232" y="31" width="80" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="yPbcOqCsxhrlnARZazFJ-24" value="" style="verticalLabelPosition=bottom;verticalAlign=top;html=1;shape=mxgraph.basic.layered_rect;dx=10;outlineConnect=0;whiteSpace=wrap;" vertex="1" parent="1">
+          <mxGeometry x="425" y="20" width="100" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="yPbcOqCsxhrlnARZazFJ-25" value="raft" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry x="455" y="30" width="40" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="yPbcOqCsxhrlnARZazFJ-27" value="raft.Make(...)" style="html=1;verticalAlign=bottom;endArrow=block;curved=0;rounded=0;" edge="1" parent="1">
+          <mxGeometry width="80" relative="1" as="geometry">
+            <mxPoint x="280" y="160" as="sourcePoint" />
+            <mxPoint x="470" y="160" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="yPbcOqCsxhrlnARZazFJ-28" value="Make函数执行&lt;br&gt;选举Leader、心跳、推送applyCh" style="html=1;align=left;spacingLeft=2;endArrow=block;rounded=0;edgeStyle=orthogonalEdgeStyle;curved=0;rounded=0;" edge="1" parent="1">
+          <mxGeometry x="-0.0057" relative="1" as="geometry">
+            <mxPoint x="480" y="160" as="sourcePoint" />
+            <Array as="points">
+              <mxPoint x="510" y="190" />
+            </Array>
+            <mxPoint x="485" y="190.02857142857135" as="targetPoint" />
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="yPbcOqCsxhrlnARZazFJ-29" value="Put/Append RPC" style="html=1;verticalAlign=bottom;endArrow=block;curved=0;rounded=0;" edge="1" parent="1">
+          <mxGeometry width="80" relative="1" as="geometry">
+            <mxPoint x="80" y="210" as="sourcePoint" />
+            <mxPoint x="270" y="210" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="yPbcOqCsxhrlnARZazFJ-30" value="RPC Handle&lt;br&gt;保存上下文opCtx&lt;br&gt;调用raft.Start(op)&lt;br&gt;阻塞等待" style="html=1;verticalAlign=bottom;endArrow=block;curved=0;rounded=0;" edge="1" parent="1">
+          <mxGeometry width="80" relative="1" as="geometry">
+            <mxPoint x="280" y="230" as="sourcePoint" />
+            <mxPoint x="470" y="230" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="yPbcOqCsxhrlnARZazFJ-31" value="Start函数执行(非Leader节点拒绝)&lt;br&gt;日志复制、follower提交、Leader提交&lt;br&gt;各节点Apply并推送至各自applyCh" style="html=1;align=left;spacingLeft=2;endArrow=block;rounded=0;edgeStyle=orthogonalEdgeStyle;curved=0;rounded=0;" edge="1" parent="1">
+          <mxGeometry x="-0.0057" relative="1" as="geometry">
+            <mxPoint x="480" y="240" as="sourcePoint" />
+            <Array as="points">
+              <mxPoint x="510" y="240" />
+              <mxPoint x="510" y="310" />
+            </Array>
+            <mxPoint x="480" y="310" as="targetPoint" />
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="yPbcOqCsxhrlnARZazFJ-33" value="applyCh" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;endSize=8;curved=0;rounded=0;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="470" y="320" as="sourcePoint" />
+            <mxPoint x="279.9999999999999" y="320" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="yPbcOqCsxhrlnARZazFJ-37" value="从applyCh取回op&lt;br&gt;判断前后状态是否一致&lt;br&gt;根据seqId进行幂等鉴定&lt;br&gt;写入内存数据库kvStore&lt;br&gt;唤醒RPC Handle" style="html=1;align=left;spacingLeft=2;endArrow=block;rounded=0;edgeStyle=orthogonalEdgeStyle;curved=0;rounded=0;" edge="1" parent="1">
+          <mxGeometry x="-0.0069" relative="1" as="geometry">
+            <mxPoint x="280" y="320" as="sourcePoint" />
+            <Array as="points">
+              <mxPoint x="310" y="320" />
+              <mxPoint x="310" y="410" />
+            </Array>
+            <mxPoint x="279.9999999999999" y="410.0000000000001" as="targetPoint" />
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="yPbcOqCsxhrlnARZazFJ-38" value="返回OK" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;endSize=8;curved=0;rounded=0;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="270" y="420" as="sourcePoint" />
+            <mxPoint x="79.99999999999989" y="420" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="yPbcOqCsxhrlnARZazFJ-39" value="Get RPC" style="html=1;verticalAlign=bottom;endArrow=block;curved=0;rounded=0;" edge="1" parent="1">
+          <mxGeometry width="80" relative="1" as="geometry">
+            <mxPoint x="80" y="460" as="sourcePoint" />
+            <mxPoint x="270" y="460" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="yPbcOqCsxhrlnARZazFJ-40" value="RPC Handle&lt;br&gt;保存上下文opCtx&lt;br&gt;调用raft.Start(op)&lt;br&gt;阻塞等待" style="html=1;verticalAlign=bottom;endArrow=block;curved=0;rounded=0;" edge="1" parent="1">
+          <mxGeometry width="80" relative="1" as="geometry">
+            <mxPoint x="280" y="470" as="sourcePoint" />
+            <mxPoint x="470" y="470" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="yPbcOqCsxhrlnARZazFJ-41" value="Start函数执行(非Leader节点拒绝)&lt;br&gt;日志复制、follower提交、Leader提交&lt;br&gt;各节点Apply并推送至各自applyCh" style="html=1;align=left;spacingLeft=2;endArrow=block;rounded=0;edgeStyle=orthogonalEdgeStyle;curved=0;rounded=0;" edge="1" parent="1">
+          <mxGeometry x="-0.0057" relative="1" as="geometry">
+            <mxPoint x="480" y="480" as="sourcePoint" />
+            <Array as="points">
+              <mxPoint x="510" y="480" />
+              <mxPoint x="510" y="550" />
+            </Array>
+            <mxPoint x="480" y="550" as="targetPoint" />
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="yPbcOqCsxhrlnARZazFJ-42" value="applyCh" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;endSize=8;curved=0;rounded=0;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="470" y="560" as="sourcePoint" />
+            <mxPoint x="279.9999999999999" y="560" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="yPbcOqCsxhrlnARZazFJ-43" value="从applyCh取回op&lt;br&gt;判断前后状态是否一致&lt;br&gt;查数据库取出数据&lt;br&gt;唤醒RPC Handle" style="html=1;align=left;spacingLeft=2;endArrow=block;rounded=0;edgeStyle=orthogonalEdgeStyle;curved=0;rounded=0;" edge="1" parent="1">
+          <mxGeometry x="-0.0069" relative="1" as="geometry">
+            <mxPoint x="280" y="560" as="sourcePoint" />
+            <Array as="points">
+              <mxPoint x="310" y="560" />
+              <mxPoint x="310" y="650" />
+            </Array>
+            <mxPoint x="279.9999999999999" y="650.0000000000001" as="targetPoint" />
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="yPbcOqCsxhrlnARZazFJ-45" value="返回Value" style="html=1;verticalAlign=bottom;endArrow=open;dashed=1;endSize=8;curved=0;rounded=0;" edge="1" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="270" y="670" as="sourcePoint" />
+            <mxPoint x="79.99999999999989" y="670" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="yPbcOqCsxhrlnARZazFJ-46" value="geyu@copyright" style="text;html=1;align=center;verticalAlign=middle;resizable=0;points=[];autosize=1;strokeColor=none;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry x="525" y="658" width="110" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="yPbcOqCsxhrlnARZazFJ-47" value="" style="endArrow=none;dashed=1;html=1;dashPattern=1 3;strokeWidth=1;rounded=0;" edge="1" parent="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="75" y="750" as="sourcePoint" />
+            <mxPoint x="74.8" y="720" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="yPbcOqCsxhrlnARZazFJ-48" value="" style="endArrow=none;dashed=1;html=1;dashPattern=1 3;strokeWidth=1;rounded=0;" edge="1" parent="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="275" y="750" as="sourcePoint" />
+            <mxPoint x="274.8" y="720" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="yPbcOqCsxhrlnARZazFJ-49" value="" style="endArrow=none;dashed=1;html=1;dashPattern=1 3;strokeWidth=1;rounded=0;" edge="1" parent="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="475" y="750" as="sourcePoint" />
+            <mxPoint x="474.8" y="720" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
