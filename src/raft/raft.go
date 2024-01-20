@@ -92,6 +92,8 @@ type Raft struct {
 	leaderId       int       // leader的id
 	lastActiveTime time.Time // 最近活跃时间（刷新时机：收到leader AppendEntries心跳、给其他candidates投票、请求其他节点投票）
 	heartBeatTime  time.Time // 最近一次心跳时间，作为leader，每隔固定毫秒向手下发送心跳包的时间
+
+	applyCh chan ApplyMsg // 应用层的提交队列
 }
 
 // GetState return currentTerm and whether this server
@@ -391,11 +393,11 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 	if rf.role != ROLE_LEADER {
 		return -1, -1, false
 	}
-
 	log := LogEntry{
 		Command: command,
 		Term:    rf.currentTerm,
 	}
+
 	rf.log = append(rf.log, log)
 	index = len(rf.log)
 	term = rf.currentTerm
@@ -552,7 +554,7 @@ func (rf *Raft) electionLoop() {
 // leader执行的逻辑
 func (rf *Raft) appendEntriesLoop() {
 	for !rf.killed() {
-		time.Sleep(1 * time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 
 		func() {
 			rf.mu.Lock()
@@ -668,31 +670,30 @@ func (rf *Raft) appendEntriesLoop() {
 
 // applyLogLoop 定期检查是否有新的日志需要提交给应用层
 // 它会一直运行直到这个 Raft 节点被 kill
-func (rf *Raft) applyLogLoop(applyCh chan ApplyMsg) {
+func (rf *Raft) applyLogLoop() {
+	noMore := false
 	for !rf.killed() {
-		time.Sleep(10 * time.Millisecond)
-
-		var appliedMsgs = make([]ApplyMsg, 0)
-
+		if noMore {
+			time.Sleep(10 * time.Millisecond)
+		}
 		func() {
 			rf.mu.Lock()
 			defer rf.mu.Unlock()
 
+			noMore = true
 			for rf.commitIndex > rf.lastApplied {
 				rf.lastApplied += 1
-				appliedMsgs = append(appliedMsgs, ApplyMsg{
+				appliedMsg := ApplyMsg{
 					CommandValid: true,
 					Command:      rf.log[rf.lastApplied-1].Command,
 					CommandIndex: rf.lastApplied,
 					CommandTerm:  rf.log[rf.lastApplied-1].Term,
-				})
+				}
+				rf.applyCh <- appliedMsg
 				DPrintf("RaftNode[%d] applyLog, currentTerm[%d] lastApplied[%d] commitIndex[%d]", rf.me, rf.currentTerm, rf.lastApplied, rf.commitIndex)
+				noMore = false
 			}
 		}()
-		// 释放锁,向应用层提交日志
-		for _, msg := range appliedMsgs {
-			applyCh <- msg
-		}
 	}
 }
 
@@ -717,6 +718,7 @@ func Make(peers []*labrpc.ClientEnd, me int, persister *Persister, applyCh chan 
 	rf.votedFor = -1
 	rf.leaderId = -1
 	rf.lastActiveTime = time.Now()
+	rf.applyCh = applyCh
 	// initialize from state persisted before a crash
 	rf.readPersist(persister.ReadRaftState())
 
@@ -725,7 +727,7 @@ func Make(peers []*labrpc.ClientEnd, me int, persister *Persister, applyCh chan 
 	// leader逻辑
 	go rf.appendEntriesLoop()
 	// apply逻辑
-	go rf.applyLogLoop(applyCh)
+	go rf.applyLogLoop()
 
 	DPrintf("Raftnode[%d]启动", me)
 
