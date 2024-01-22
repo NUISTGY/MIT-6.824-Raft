@@ -4,6 +4,7 @@ import (
 	"../labgob"
 	"../labrpc"
 	"../raft"
+	"bytes"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -54,6 +55,9 @@ type KVServer struct {
 	kvStore map[string]string  // kvStore存储应用层状态
 	reqMap  map[int]*OpContext // reqMap存储正在进行中的RPC调用，(log index, 请求上下文)
 	seqMap  map[int64]int64    // seqMap记录每个clientId已提交的最大请求ID以便做写入幂等性判定，(客户端id, 客户端seq)
+
+	// for snapshot
+	lastAppliedIndex int // 已应用到kvStore的日志index
 }
 
 func (kv *KVServer) Get(args *GetArgs, reply *GetReply) {
@@ -223,66 +227,118 @@ func StartKVServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persiste
 	kv.kvStore = make(map[string]string)
 	kv.reqMap = make(map[int]*OpContext)
 	kv.seqMap = make(map[int64]int64)
+	kv.lastAppliedIndex = 0
 
 	go kv.applyLoop()
+	go kv.snapshotLoop()
 
 	return kv
 }
 
-// applyLoop 不断监听raft层的已经apply的日志，并处理
-// 如果是写操作则判定Op的sequence id是否过期，过期则跳过，否则生效到kvStore。
-// 读操作则将kvStore此时的k=v保存到opCtx，并唤起阻塞的RPC。
+// applyLoop
 func (kv *KVServer) applyLoop() {
 	for !kv.killed() {
 		select {
 		case msg := <-kv.applyCh:
-			cmd := msg.Command
-			index := msg.CommandIndex
-
-			func() {
-				kv.mu.Lock()
-				defer kv.mu.Unlock()
-
-				// 操作日志
-				op := cmd.(*Op)
-
-				opCtx, existOp := kv.reqMap[index]
-				prevSeq, existSeq := kv.seqMap[op.ClientId]
-				kv.seqMap[op.ClientId] = op.SeqId
-
-				if existOp { // 存在等待结果的RPC, 那么判断状态是否与写入时一致
-					if opCtx.op.Term != op.Term {
-						opCtx.wrongLeader = true
+			// 如果是安装快照
+			if !msg.CommandValid {
+				func() {
+					kv.mu.Lock()
+					defer kv.mu.Unlock()
+					if len(msg.Snapshot) == 0 { // 空快照，清空数据
+						kv.kvStore = make(map[string]string)
+						kv.seqMap = make(map[int64]int64)
+					} else {
+						// 反序列化快照, 安装到内存
+						r := bytes.NewBuffer(msg.Snapshot)
+						d := labgob.NewDecoder(r)
+						d.Decode(&kv.kvStore)
+						d.Decode(&kv.seqMap)
 					}
-				}
+					// 已应用到哪个索引
+					kv.lastAppliedIndex = msg.LastIncludedIndex
+					DPrintf("KVServer[%d] installSnapshot, kvStore[%v], seqMap[%v] lastAppliedIndex[%v]", kv.me, len(kv.kvStore), len(kv.seqMap), kv.lastAppliedIndex)
+				}()
+			} else { // 如果是普通log
+				cmd := msg.Command
+				index := msg.CommandIndex
 
-				// 只处理ID单调递增的客户端写请求
-				if op.Type == OP_TYPE_PUT || op.Type == OP_TYPE_APPEND {
-					if !existSeq || op.SeqId > prevSeq { // 如果是递增的请求ID，那么接受它的变更，对于重试的操作就不需要处理了，幂等
-						if op.Type == OP_TYPE_PUT { // put操作
-							kv.kvStore[op.Key] = op.Value
-						} else if op.Type == OP_TYPE_APPEND { // put-append操作
-							if val, exist := kv.kvStore[op.Key]; exist {
-								kv.kvStore[op.Key] = val + op.Value
-							} else {
-								kv.kvStore[op.Key] = op.Value
-							}
+				func() {
+					kv.mu.Lock()
+					defer kv.mu.Unlock()
+
+					// 更新已经应用到的日志
+					kv.lastAppliedIndex = index
+
+					// 操作日志
+					op := cmd.(*Op)
+
+					opCtx, existOp := kv.reqMap[index]
+					prevSeq, existSeq := kv.seqMap[op.ClientId]
+					kv.seqMap[op.ClientId] = op.SeqId
+
+					if existOp { // 存在等待结果的RPC, 那么判断状态是否与写入时一致
+						if opCtx.op.Term != op.Term {
+							opCtx.wrongLeader = true
 						}
-					} else if existOp {
-						opCtx.ignored = true
 					}
-				} else { // OP_TYPE_GET
-					if existOp {
-						opCtx.value, opCtx.keyExist = kv.kvStore[op.Key]
-					}
-				}
-				DPrintf("RaftNode[%d] applyLoop, kvStore[%v]", kv.me, len(kv.kvStore))
 
-				// 唤醒Get/PutAppend的 case <-opCtx.committed: 这行之后的代码，从而响应客户端的RPC
-				if existOp {
-					opCtx.committed <- 1
-				}
-			}()
+					// 只处理ID单调递增的客户端写请求
+					if op.Type == OP_TYPE_PUT || op.Type == OP_TYPE_APPEND {
+						if !existSeq || op.SeqId > prevSeq { // 如果是递增的请求ID，那么接受它的变更，对于重试的操作就不需要处理了，幂等
+							if op.Type == OP_TYPE_PUT { // put操作
+								kv.kvStore[op.Key] = op.Value
+							} else if op.Type == OP_TYPE_APPEND { // put-append操作
+								if val, exist := kv.kvStore[op.Key]; exist {
+									kv.kvStore[op.Key] = val + op.Value
+								} else {
+									kv.kvStore[op.Key] = op.Value
+								}
+							}
+						} else if existOp {
+							opCtx.ignored = true
+						}
+					} else { // OP_TYPE_GET
+						if existOp {
+							opCtx.value, opCtx.keyExist = kv.kvStore[op.Key]
+						}
+					}
+					DPrintf("RaftNode[%d] applyLoop, kvStore[%v]", kv.me, len(kv.kvStore))
+
+					// 唤醒Get/PutAppend的 case <-opCtx.committed: 这行之后的代码，从而响应客户端的RPC
+					if existOp {
+						opCtx.committed <- 1
+					}
+				}()
+			}
 		}
+	}
+}
+
+func (kv *KVServer) snapshotLoop() {
+	for !kv.killed() {
+		var snapshot []byte
+		var lastAppliedIndex int
+		// 锁内dump snapshot
+		func() {
+			// 如果raft log超过了maxraftstate大小，那么对kvStore快照下来
+			if kv.maxraftstate != -1 && kv.rf.CheckLogSize(kv.maxraftstate) { // 这里调用ExceedLogSize不要加kv锁，否则会死锁
+				// 锁内快照，离开锁通知raft处理
+				kv.mu.Lock()
+				w := new(bytes.Buffer)
+				e := labgob.NewEncoder(w)
+				e.Encode(kv.kvStore) // kv数据库
+				e.Encode(kv.seqMap)  // 当前各客户端最大请求编号，也要随着snapshot走
+				snapshot = w.Bytes()
+				lastAppliedIndex = kv.lastAppliedIndex
+				kv.mu.Unlock()
+			}
+		}()
+		// 锁外通知raft层截断，否则有死锁
+		if snapshot != nil {
+			// 通知raft落地snapshot并截断日志（都是已提交的日志，不会因为主从切换截断，放心操作）
+			kv.rf.TakeSnapshot(snapshot, lastAppliedIndex)
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }
