@@ -60,6 +60,7 @@ func (kv *KVServer) Get(args *GetArgs, reply *GetReply) {
 	// Your code here.
 	reply.Err = OK
 
+	//todo 1.构造本次操作的命令对象OP
 	op := &Op{
 		Type:     OP_TYPE_GET,
 		Key:      args.Key,
@@ -69,12 +70,15 @@ func (kv *KVServer) Get(args *GetArgs, reply *GetReply) {
 
 	// 写入raft层
 	var isLeader bool
+	//todo 2.写入ruft层-kv.rf.Start(op)
 	op.Index, op.Term, isLeader = kv.rf.Start(op)
 	if !isLeader {
+		//todo 2.1 如果不是leader，则返回ErrWrongLeader，外层client会重试
 		reply.Err = ErrWrongLeader
 		return
 	}
 
+	//todo 3.构造本次操作的上下文对象opCtx
 	opCtx := &OpContext{
 		op:        op,
 		committed: make(chan byte),
@@ -84,7 +88,7 @@ func (kv *KVServer) Get(args *GetArgs, reply *GetReply) {
 		kv.mu.Lock()
 		defer kv.mu.Unlock()
 
-		// 保存RPC上下文，等待提交回调，可能会因为Leader变更覆盖同样Index，不过前一个RPC会超时退出并令客户端重试
+		//todo 4.将本次操作的上下文保存到reqMap中，等待提交回调，(log index, 请求上下文)
 		kv.reqMap[op.Index] = opCtx
 	}()
 
@@ -102,6 +106,7 @@ func (kv *KVServer) Get(args *GetArgs, reply *GetReply) {
 	timer := time.NewTimer(2000 * time.Millisecond)
 	defer timer.Stop()
 	select {
+	//todo 5.阻塞等待applyLoop()中完成该操作
 	case <-opCtx.committed: // 阻塞等待kv完成apply该操作
 		if opCtx.wrongLeader { // 同样index位置的term不一样了, 说明leader变了，需要client向新leader重新读取
 			reply.Err = ErrWrongLeader
@@ -235,6 +240,7 @@ func StartKVServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persiste
 func (kv *KVServer) applyLoop() {
 	for !kv.killed() {
 		select {
+		//todo 6.监听raft层的已经apply的日志，经过共识算法处理的OP对象、index会返回
 		case msg := <-kv.applyCh:
 			cmd := msg.Command
 			index := msg.CommandIndex
@@ -246,18 +252,23 @@ func (kv *KVServer) applyLoop() {
 				// 操作日志
 				op := cmd.(*Op)
 
+				//todo 7.根据index找到reqMap中存过的RPC上下文opCtx
 				opCtx, existOp := kv.reqMap[index]
+				//todo 9.取出该客户端上一次操作对应的seqId，并且把本次操作的seqId保存到seqMap中
 				prevSeq, existSeq := kv.seqMap[op.ClientId]
 				kv.seqMap[op.ClientId] = op.SeqId
 
-				if existOp { // 存在等待结果的RPC, 那么判断状态是否与写入时一致
+				if existOp {
+					//todo 8.存在等待结果的RPC, 那么判断状态是否与写入时一致-opCtx.op.Term != op.Term
 					if opCtx.op.Term != op.Term {
 						opCtx.wrongLeader = true
 					}
 				}
 
 				// 只处理ID单调递增的客户端写请求
+				//todo 10.读、写、追加三种操作的分支
 				if op.Type == OP_TYPE_PUT || op.Type == OP_TYPE_APPEND {
+					//todo 11.若是写操作：通过对比本次请求的seqId和上一次请求的seqId，如果是递增的，说明是新的请求，否则说明是重试的请求直接忽略
 					if !existSeq || op.SeqId > prevSeq { // 如果是递增的请求ID，那么接受它的变更，对于重试的操作就不需要处理了，幂等
 						if op.Type == OP_TYPE_PUT { // put操作
 							kv.kvStore[op.Key] = op.Value
@@ -272,13 +283,14 @@ func (kv *KVServer) applyLoop() {
 						opCtx.ignored = true
 					}
 				} else { // OP_TYPE_GET
+					//todo 12.读操作直接返回
 					if existOp {
 						opCtx.value, opCtx.keyExist = kv.kvStore[op.Key]
 					}
 				}
 				DPrintf("RaftNode[%d] applyLoop, kvStore[%v]", kv.me, len(kv.kvStore))
 
-				// 唤醒Get/PutAppend的 case <-opCtx.committed: 这行之后的代码，从而响应客户端的RPC
+				//todo 13.唤醒（5）处的Get/PutAppend
 				if existOp {
 					opCtx.committed <- 1
 				}

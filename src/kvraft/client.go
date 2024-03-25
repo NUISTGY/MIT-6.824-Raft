@@ -26,6 +26,7 @@ func nrand() int64 {
 }
 
 func MakeClerk(servers []*labrpc.ClientEnd) *Clerk {
+	//todo 1. 构造Clerk对象，一个客户端对应多个服务端
 	ck := new(Clerk)
 	ck.servers = servers
 	// You'll have to add code here.
@@ -46,6 +47,7 @@ func MakeClerk(servers []*labrpc.ClientEnd) *Clerk {
 // arguments. and reply must be passed as a pointer.
 func (ck *Clerk) Get(key string) string {
 	// You will have to modify this function.
+	// todo 2.构造Get请求，并发送给leader节点，获取结果
 	args := GetArgs{
 		Key:      key,
 		ClientId: ck.clientId,
@@ -58,7 +60,7 @@ func (ck *Clerk) Get(key string) string {
 	leaderId := ck.leaderId
 	ck.mu.Unlock()
 
-	for { // 轮询重试，注意每次轮询不会改变Key、ClientId、SeqId
+	for { //todo 3.轮询重试，注意每次轮询不会改变Key、ClientId、SeqId
 		reply := GetReply{}
 		if ck.servers[leaderId].Call("KVServer.Get", &args, &reply) {
 			if reply.Err == OK { // 命中
@@ -67,7 +69,7 @@ func (ck *Clerk) Get(key string) string {
 				return ""
 			}
 		}
-		// 没找到leader，重新选择leader
+		//todo 3.1如果没找到leader，重新选择leader
 		ck.mu.Lock()
 		leaderId = (leaderId + 1) % len(ck.servers)
 		ck.leaderId = leaderId
